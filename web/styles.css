@@ -669,6 +669,134 @@ ul li { margin-bottom: 6px; }
   border-bottom: 1px solid var(--hairline);
 }
 
+/* ── Big record button ──────────────────────────────────────── */
+.record-primary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-md);
+  margin-bottom: var(--sp-md);
+}
+
+.btn-record-primary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-sm);
+  padding: 18px var(--sp-lg);
+  background: var(--surface-2);
+  border: 2px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-record-primary:hover {
+  background: var(--surface-3);
+  border-color: var(--hairline-tertiary);
+}
+
+.btn-record-primary.recording {
+  background: rgba(207, 45, 86, 0.12);
+  border-color: rgba(207, 45, 86, 0.55);
+  color: #e05577;
+}
+
+.record-dot-big {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.btn-record-primary.recording .record-dot-big {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.record-timer {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: #e05577;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+/* ── OR divider ─────────────────────────────────────────────── */
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin: var(--sp-md) 0;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+.or-divider::before, .or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* ── Auto info row ──────────────────────────────────────────── */
+.auto-info-row {
+  display: flex;
+  gap: var(--sp-lg);
+  flex-wrap: wrap;
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.auto-info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  font-size: 13px;
+}
+
+.auto-info-label {
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+.auto-info-value {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.location-action-btn {
+  margin-left: 4px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.location-action-btn:hover { background: var(--surface-2); }
+
+/* ── Record hint ─────────────────────────────────────────────── */
+.record-hint {
+  margin: var(--sp-sm) 0 0;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+/* ── Nav status card ─────────────────────────────────────────── */
+.top-nav .status-card {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .content-grid {

@@ -7,15 +7,24 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+MEETING_TYPE_KEYWORDS = {
+    "standup": ("standup", "스탠드업", "데일리", "daily"),
+    "planning": ("기획", "planning", "로드맵", "roadmap", "전략"),
+    "hr": ("인사", "채용", "면접", "hr", "직원", "승진", "평가", "인력"),
+    "external": ("대외", "외부", "파트너", "협력사", "언론", "홍보", "pr", "external"),
+    "review": ("월간", "monthly", "리뷰", "review", "retrospective"),
+    "sales": ("영업", "sales", "고객", "client"),
+}
+
 
 def _summarize_groq(text: str) -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is not set")
 
-    prompt = f"""회의 전사 내용을 바탕으로 요약본을 작성해줘.
-반드시 아래 JSON 형식으로만 응답해야 해:
+    prompt = f"""회의 전사 내용을 바탕으로 아래 JSON 형식으로만 응답해줘:
 {{
+    "title": "회의 핵심 내용을 담은 제목 (15자 이내, 명사형으로 끝내기)",
     "abstract": "회의의 전체적인 내용을 2~3문장으로 요약",
     "decisions": ["결정된 사항 1", "결정된 사항 2"],
     "action_items": ["할 일 1 (담당자)", "할 일 2 (기한)"]
@@ -54,6 +63,7 @@ def build_summary_payload(transcript_lines: list[str]) -> dict[str, str]:
     cleaned = [line.strip() for line in transcript_lines if line.strip()]
     if not cleaned:
         return {
+            "title": "",
             "abstract": "전사 내용이 비어 있습니다.",
             "decisions_json": "[]",
             "action_items_json": "[]",
@@ -63,24 +73,23 @@ def build_summary_payload(transcript_lines: list[str]) -> dict[str, str]:
 
     try:
         result = _summarize_groq(full_text)
+        title = result.get("title", "")
         abstract = result.get("abstract", "요약 생성 실패")
         decisions = result.get("decisions", [])
         action_items = result.get("action_items", [])
     except Exception as exc:
         logger.warning(f"LLM 요약 실패, 규칙 기반으로 전환: {exc}")
+        title = ""
         abstract = " ".join(cleaned[:5])[:700]
         decisions = _pick_lines_by_keywords(
-            cleaned,
-            keywords=("결정", "확정", "합의", "decide", "decision"),
-            limit=6,
+            cleaned, keywords=("결정", "확정", "합의", "decide", "decision"), limit=6,
         )
         action_items = _pick_lines_by_keywords(
-            cleaned,
-            keywords=("할 일", "todo", "action", "담당", "까지", "기한"),
-            limit=8,
+            cleaned, keywords=("할 일", "todo", "action", "담당", "까지", "기한"), limit=8,
         )
 
     return {
+        "title": title,
         "abstract": abstract,
         "decisions_json": json.dumps(decisions, ensure_ascii=False),
         "action_items_json": json.dumps(action_items, ensure_ascii=False),
@@ -90,14 +99,10 @@ def build_summary_payload(transcript_lines: list[str]) -> dict[str, str]:
 def build_metadata_payload(title: str, transcript_lines: list[str]) -> dict[str, str]:
     text = f"{title} {' '.join(transcript_lines)}".lower()
     meeting_type = "general"
-    if any(word in text for word in ("standup", "스탠드업", "데일리", "daily")):
-        meeting_type = "standup"
-    elif any(word in text for word in ("월간", "monthly", "리뷰", "review")):
-        meeting_type = "review"
-    elif any(word in text for word in ("영업", "sales", "고객", "client")):
-        meeting_type = "sales"
-    elif any(word in text for word in ("기획", "planning", "로드맵", "roadmap")):
-        meeting_type = "planning"
+    for m_type, keywords in MEETING_TYPE_KEYWORDS.items():
+        if any(word in text for word in keywords):
+            meeting_type = m_type
+            break
 
     tags: list[str] = []
     keyword_tags = {

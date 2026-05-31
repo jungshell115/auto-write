@@ -44,10 +44,12 @@ def process_meeting(
             action_items_json=summary["action_items_json"],
         )
         metadata = build_metadata_payload(str(meeting["title"]), lines)
+        ai_title = summary.get("title", "").strip()
         update_meeting_metadata(
             meeting_id=meeting_id,
             meeting_type=metadata["meeting_type"],
             tags_json=metadata["tags_json"],
+            title=ai_title if ai_title else None,
         )
 
         update_meeting_status(meeting_id=meeting_id, status="completed")

@@ -212,9 +212,13 @@ def update_meeting_metadata(
     tags_json: str | None = None,
     project_id: str | None = None,
     privacy_level: str | None = None,
+    title: str | None = None,
 ) -> None:
     updates: list[str] = []
     values: list[str | None] = []
+    if title is not None:
+        updates.append("title = ?")
+        values.append(title)
     if meeting_type is not None:
         updates.append("meeting_type = ?")
         values.append(meeting_type)

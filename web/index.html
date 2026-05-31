@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#010102" />
     <title>Auto Write</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles.css?v=3" />
+    <link rel="stylesheet" href="/styles.css?v=4" />
   </head>
   <body>
 
@@ -17,67 +17,71 @@
         Auto Write
       </span>
       <div class="nav-actions">
+        <div class="status-card">
+          <span class="pulse-dot"></span>
+          <span id="serverStatus">서버 확인 중</span>
+        </div>
         <button id="refreshButton" class="btn-ghost">새로고침</button>
       </div>
     </nav>
 
     <main class="app-shell">
 
-      <!-- Hero -->
-      <section class="hero">
-        <div>
-          <p class="eyebrow">AI Meeting Notes</p>
-          <h1>Auto Write</h1>
-          <p class="lede">녹음 파일을 올리면 전사, 요약, 결정사항, 할 일을 자동으로 정리합니다.</p>
-        </div>
-        <div class="status-card">
-          <span class="pulse-dot"></span>
-          <span id="serverStatus">서버 확인 중</span>
-        </div>
-      </section>
+      <!-- Record Panel — 최상단 배치 -->
+      <section class="card record-panel" style="margin-bottom:12px;">
 
-      <!-- New meeting panel -->
-      <section class="card record-panel" style="margin-bottom: 12px;">
-        <div class="panel-header">
-          <div>
-            <h2>새 회의</h2>
-            <p class="panel-subtitle">브라우저 녹음 또는 음성 파일 업로드를 사용할 수 있습니다.</p>
+        <!-- 1. 녹음 버튼 (최상단, 가장 눈에 띄게) -->
+        <div class="record-primary-row">
+          <button id="recordButton" class="btn-record-primary">
+            <span class="record-dot-big"></span>
+            <span id="recordLabel">회의 녹음 시작</span>
+          </button>
+          <span id="recordTimer" class="record-timer hidden">00:00</span>
+        </div>
+
+        <div class="or-divider"><span>또는 파일 업로드</span></div>
+
+        <!-- 2. 파일 업로드 (보조) -->
+        <div class="upload-row" style="margin-bottom:16px;">
+          <input id="audioFile" type="file" accept="audio/*" />
+          <button id="uploadButton" class="btn-primary">업로드 &amp; 분석</button>
+        </div>
+
+        <!-- 3. 자동 수집 정보 -->
+        <div class="auto-info-row">
+          <div class="auto-info-item">
+            <span class="auto-info-label">📍 장소</span>
+            <span id="locationDisplay" class="auto-info-value">위치 확인 중...</span>
+          </div>
+          <div class="auto-info-item">
+            <span class="auto-info-label">🕐 일시</span>
+            <span id="datetimeDisplay" class="auto-info-value">—</span>
           </div>
         </div>
 
-        <div class="form-grid">
-          <label>
-            회의 제목
-            <input id="meetingTitle" type="text" placeholder="예: 주간 제품 회의" />
-          </label>
+        <!-- 4. 회의 정보 (보조) -->
+        <div class="form-grid" style="margin-top:12px;">
           <label>
             회의 유형
             <select id="meetingType">
               <option value="general">일반</option>
-              <option value="standup">스탠드업</option>
               <option value="planning">기획</option>
-              <option value="review">리뷰</option>
-              <option value="sales">영업</option>
+              <option value="hr">인사</option>
+              <option value="external">대외</option>
+              <option value="other">기타</option>
             </select>
+          </label>
+          <label>
+            회의 제목
+            <input id="meetingTitle" type="text" placeholder="AI가 자동 생성합니다" />
           </label>
         </div>
 
-        <div class="upload-row">
-          <input id="audioFile" type="file" accept="audio/*" />
-          <button id="uploadButton" class="btn-primary">파일 업로드 &amp; 분석</button>
-        </div>
-
-        <div class="record-row">
-          <button id="recordButton" class="btn-record">
-            <span class="record-dot"></span>
-            브라우저 녹음 시작
-          </button>
-          <span id="recordingHint">iPhone Safari에서는 권한 요청이 표시될 수 있습니다.</span>
-        </div>
+        <p id="recordingHint" class="record-hint">iPhone Safari에서는 마이크 권한 요청이 표시됩니다.</p>
       </section>
 
-      <!-- Toolbar / filter -->
-      <div class="card toolbar" style="margin-bottom: 12px;">
+      <!-- Toolbar -->
+      <div class="card toolbar" style="margin-bottom:12px;">
         <label class="search-box" style="flex:1 1 260px;">
           <input id="searchInput" type="search" placeholder="회의 제목 또는 파일명 검색" />
         </label>
@@ -85,10 +89,10 @@
           <select id="filterType">
             <option value="">전체 유형</option>
             <option value="general">일반</option>
-            <option value="standup">스탠드업</option>
             <option value="planning">기획</option>
-            <option value="review">리뷰</option>
-            <option value="sales">영업</option>
+            <option value="hr">인사</option>
+            <option value="external">대외</option>
+            <option value="other">기타</option>
           </select>
         </label>
         <button id="filterButton" class="btn-secondary">필터 적용</button>
@@ -108,14 +112,12 @@
 
         <!-- Detail -->
         <section class="card-xl detail-card">
-
           <div id="emptyDetail" class="empty-detail">
             <h2>회의를 선택하세요</h2>
             <p>완료된 회의는 요약, 결정사항, 할 일, 전사 전문, 공유 링크를 확인할 수 있습니다.</p>
           </div>
 
           <article id="meetingDetail" class="hidden">
-
             <div class="detail-header">
               <div>
                 <p id="detailMeta" class="eyebrow" style="margin-bottom:6px;"></p>
@@ -130,13 +132,11 @@
 
             <div id="shareResult" class="share-result hidden"></div>
 
-            <!-- AI Summary -->
             <div class="section-label">AI 요약</div>
             <div class="summary-block" style="margin-bottom:20px;">
               <p id="summaryText"></p>
             </div>
 
-            <!-- Decisions + Actions -->
             <div class="two-column" style="margin-bottom:20px;">
               <div>
                 <div class="section-label">결정 사항</div>
@@ -148,16 +148,14 @@
               </div>
             </div>
 
-            <!-- Transcript -->
             <div class="section-label">전사 전문</div>
             <div id="transcriptList" class="transcript-list"></div>
-
           </article>
         </section>
       </div>
 
     </main>
 
-    <script src="/app.js?v=4" type="module"></script>
+    <script src="/app.js?v=5" type="module"></script>
   </body>
 </html>
