@@ -1,0 +1,23 @@
+INFO:     Started server process [15644]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53684 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53684 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54084 - "GET /health HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58665 - "GET /docs HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58665 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58689 - "POST /v1/meetings/upload-file HTTP/1.1" 200 OK
+LLM 요약 실패, 규칙 기반으로 전환: There is no current event loop in thread 'AnyIO worker thread'.
+INFO:     192.168.45.75:58692 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586 HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58693 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55230 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586/transcript HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58694 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586 HTTP/1.1" 200 OK
+INFO:     192.168.45.75:58694 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     192.168.45.75:58695 - "GET /v1/meetings/bc5960f4-fb9e-4313-a085-2f6002f7c586/transcript HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [15644]

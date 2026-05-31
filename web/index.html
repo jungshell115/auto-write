@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#010102" />
+    <title>Auto Write</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css?v=3" />
+  </head>
+  <body>
+
+    <!-- Top nav -->
+    <nav class="top-nav">
+      <span class="nav-brand">
+        <span class="nav-brand-dot"></span>
+        Auto Write
+      </span>
+      <div class="nav-actions">
+        <button id="refreshButton" class="btn-ghost">새로고침</button>
+      </div>
+    </nav>
+
+    <main class="app-shell">
+
+      <!-- Hero -->
+      <section class="hero">
+        <div>
+          <p class="eyebrow">AI Meeting Notes</p>
+          <h1>Auto Write</h1>
+          <p class="lede">녹음 파일을 올리면 전사, 요약, 결정사항, 할 일을 자동으로 정리합니다.</p>
+        </div>
+        <div class="status-card">
+          <span class="pulse-dot"></span>
+          <span id="serverStatus">서버 확인 중</span>
+        </div>
+      </section>
+
+      <!-- New meeting panel -->
+      <section class="card record-panel" style="margin-bottom: 12px;">
+        <div class="panel-header">
+          <div>
+            <h2>새 회의</h2>
+            <p class="panel-subtitle">브라우저 녹음 또는 음성 파일 업로드를 사용할 수 있습니다.</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            회의 제목
+            <input id="meetingTitle" type="text" placeholder="예: 주간 제품 회의" />
+          </label>
+          <label>
+            회의 유형
+            <select id="meetingType">
+              <option value="general">일반</option>
+              <option value="standup">스탠드업</option>
+              <option value="planning">기획</option>
+              <option value="review">리뷰</option>
+              <option value="sales">영업</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="upload-row">
+          <input id="audioFile" type="file" accept="audio/*" />
+          <button id="uploadButton" class="btn-primary">파일 업로드 &amp; 분석</button>
+        </div>
+
+        <div class="record-row">
+          <button id="recordButton" class="btn-record">
+            <span class="record-dot"></span>
+            브라우저 녹음 시작
+          </button>
+          <span id="recordingHint">iPhone Safari에서는 권한 요청이 표시될 수 있습니다.</span>
+        </div>
+      </section>
+
+      <!-- Toolbar / filter -->
+      <div class="card toolbar" style="margin-bottom: 12px;">
+        <label class="search-box" style="flex:1 1 260px;">
+          <input id="searchInput" type="search" placeholder="회의 제목 또는 파일명 검색" />
+        </label>
+        <label style="white-space:nowrap; min-width:100px;">
+          <select id="filterType">
+            <option value="">전체 유형</option>
+            <option value="general">일반</option>
+            <option value="standup">스탠드업</option>
+            <option value="planning">기획</option>
+            <option value="review">리뷰</option>
+            <option value="sales">영업</option>
+          </select>
+        </label>
+        <button id="filterButton" class="btn-secondary">필터 적용</button>
+      </div>
+
+      <!-- Content grid -->
+      <div class="content-grid">
+
+        <!-- Meeting list -->
+        <aside>
+          <div class="list-header">
+            <h2>회의 목록</h2>
+            <span id="meetingCount" class="meeting-count">0개</span>
+          </div>
+          <div id="meetingList" class="meeting-list"></div>
+        </aside>
+
+        <!-- Detail -->
+        <section class="card-xl detail-card">
+
+          <div id="emptyDetail" class="empty-detail">
+            <h2>회의를 선택하세요</h2>
+            <p>완료된 회의는 요약, 결정사항, 할 일, 전사 전문, 공유 링크를 확인할 수 있습니다.</p>
+          </div>
+
+          <article id="meetingDetail" class="hidden">
+
+            <div class="detail-header">
+              <div>
+                <p id="detailMeta" class="eyebrow" style="margin-bottom:6px;"></p>
+                <h2 id="detailTitle" style="margin-bottom:0;"></h2>
+              </div>
+              <div class="action-group">
+                <button id="shareButton" class="btn-ghost">공유 링크</button>
+                <a id="markdownLink" class="btn-ghost ghost-link" target="_blank">Markdown</a>
+                <a id="pdfLink" class="btn-ghost ghost-link" target="_blank">PDF</a>
+              </div>
+            </div>
+
+            <div id="shareResult" class="share-result hidden"></div>
+
+            <!-- AI Summary -->
+            <div class="section-label">AI 요약</div>
+            <div class="summary-block" style="margin-bottom:20px;">
+              <p id="summaryText"></p>
+            </div>
+
+            <!-- Decisions + Actions -->
+            <div class="two-column" style="margin-bottom:20px;">
+              <div>
+                <div class="section-label">결정 사항</div>
+                <ul id="decisionsList"></ul>
+              </div>
+              <div>
+                <div class="section-label">할 일</div>
+                <ul id="actionsList"></ul>
+              </div>
+            </div>
+
+            <!-- Transcript -->
+            <div class="section-label">전사 전문</div>
+            <div id="transcriptList" class="transcript-list"></div>
+
+          </article>
+        </section>
+      </div>
+
+    </main>
+
+    <script src="/app.js?v=4" type="module"></script>
+  </body>
+</html>
