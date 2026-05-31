@@ -5,32 +5,7 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: REDIS_URL
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_ENDPOINT_URL
-        sync: false
-      - key: R2_BUCKET_NAME
-        value: auto-write-uploads
-      - key: DATA_DIR
-        value: /tmp/auto-write-data
-    disk:
-      name: auto-write-db
-      mountPath: /data
-      sizeGB: 1
-
-  - type: worker
-    name: auto-write-worker
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: rq worker meetings --url $REDIS_URL
+    plan: free
     envVars:
       - key: REDIS_URL
         sync: false
