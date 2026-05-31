@@ -180,6 +180,8 @@ def init_db() -> None:
         _ensure_column(conn, "meetings", "tags_json",         "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "meetings", "project_id",        "TEXT")
         _ensure_column(conn, "meetings", "privacy_level",     "TEXT NOT NULL DEFAULT 'private'")
+        _ensure_column(conn, "meetings", "duration_sec",      "INTEGER")
+        _ensure_column(conn, "meetings", "live_notes_json",   "TEXT")
         conn.commit()
 
 
@@ -202,6 +204,8 @@ def create_meeting(
     tags_json: str = "[]",
     project_id: str | None = None,
     privacy_level: str = "private",
+    duration_sec: int | None = None,
+    live_notes_json: str = "[]",
 ) -> None:
     now = _now_iso()
     with _conn() as conn:
@@ -210,12 +214,14 @@ def create_meeting(
                 meeting_id, title, meeting_type, meeting_date,
                 source_filename, stored_path, status,
                 participants_json, tags_json, project_id, privacy_level,
+                duration_sec, live_notes_json,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             meeting_id, title, meeting_type, meeting_date,
             source_filename, stored_path, status,
             participants_json, tags_json, project_id, privacy_level,
+            duration_sec, live_notes_json,
             now, now,
         ))
         conn.commit()
@@ -479,11 +485,22 @@ def get_stats() -> dict:
             "SELECT COUNT(*) as cnt FROM meetings WHERE created_at >= ?",
             (_week_start_iso(),),
         ).fetchone()
+        dur_row = conn.execute("""
+            SELECT
+                SUM(duration_sec) as total_sec,
+                AVG(duration_sec) as avg_sec
+            FROM meetings
+            WHERE status='completed' AND duration_sec IS NOT NULL AND duration_sec > 0
+        """).fetchone()
+    total_sec = int(dur_row["total_sec"] or 0)
+    avg_sec   = int(dur_row["avg_sec"]   or 0)
     return {
-        "total":      total_row["total"] or 0,
-        "completed":  total_row["completed"] or 0,
-        "failed":     total_row["failed"] or 0,
-        "processing": total_row["processing"] or 0,
-        "by_type":    [{"meeting_type": r["meeting_type"], "count": r["count"]} for r in by_type],
-        "this_week":  this_week["cnt"] or 0,
+        "total":           total_row["total"] or 0,
+        "completed":       total_row["completed"] or 0,
+        "failed":          total_row["failed"] or 0,
+        "processing":      total_row["processing"] or 0,
+        "by_type":         [{"meeting_type": r["meeting_type"], "count": r["count"]} for r in by_type],
+        "this_week":       this_week["cnt"] or 0,
+        "total_min":       total_sec // 60,
+        "avg_min":         avg_sec // 60,
     }

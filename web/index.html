@@ -56,6 +56,14 @@
             <span class="stat-label">이번 주</span>
           </div>
           <div class="stat-item">
+            <span class="stat-value" id="statTotalMin">—</span>
+            <span class="stat-label">총 회의 시간(분)</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statAvgMin">—</span>
+            <span class="stat-label">평균 회의 시간(분)</span>
+          </div>
+          <div class="stat-item">
             <span class="stat-value" id="statFailed">—</span>
             <span class="stat-label">오류</span>
           </div>
@@ -73,6 +81,16 @@
             <span id="recordLabel">회의 녹음 시작</span>
           </button>
           <span id="recordTimer" class="record-timer hidden">00:00</span>
+        </div>
+
+        <!-- 파형 시각화 + 실시간 메모 (녹음 중만 표시) -->
+        <div id="waveformArea" class="hidden">
+          <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+          <div id="liveNotesDisplay" class="live-notes-display"></div>
+          <div class="live-note-input-row">
+            <input id="liveNoteInput" type="text"
+              placeholder="📝 지금 이 순간 메모... (Enter로 추가)" />
+          </div>
         </div>
 
         <div class="or-divider"><span>또는 파일 업로드</span></div>
@@ -194,6 +212,11 @@
                 <div class="section-label">할 일</div>
                 <ul id="actionsList"></ul>
               </div>
+            </div>
+
+            <div id="liveNotesSavedSection" class="hidden">
+              <div class="section-label">📝 녹음 중 메모</div>
+              <div id="liveNotesSaved" class="live-notes-saved"></div>
             </div>
 
             <div class="section-label">전사 전문</div>

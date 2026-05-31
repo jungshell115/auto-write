@@ -199,6 +199,8 @@ async def upload_meeting_file(
     meeting_type: str = Form("general"),
     meeting_date: str = Form(...),
     template:     str = Form("general"),
+    duration_sec: int = Form(0),
+    live_notes:   str = Form("[]"),
     file: UploadFile = File(...),
 ) -> UploadMeetingResponse:
     meeting_id = str(uuid4())
@@ -216,6 +218,8 @@ async def upload_meeting_file(
         meeting_id=meeting_id, title=title, meeting_type=meeting_type,
         meeting_date=meeting_date, source_filename=file.filename or saved_name,
         stored_path=str(saved_path), status="queued",
+        duration_sec=duration_sec if duration_sec > 0 else None,
+        live_notes_json=live_notes,
     )
     job_id = _enqueue(meeting_id, background_tasks, template=template)
     return UploadMeetingResponse(meeting_id=meeting_id, job_id=job_id, status="queued")

@@ -35,6 +35,7 @@ class MeetingStatusResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
     privacy_level: str = "private"
+    duration_sec: int | None = None
 
 
 class TranscriptSegmentResponse(BaseModel):
@@ -104,3 +105,5 @@ class StatsResponse(BaseModel):
     processing: int
     by_type: list[StatsTypeCount]
     this_week: int
+    total_min: int = 0
+    avg_min: int = 0

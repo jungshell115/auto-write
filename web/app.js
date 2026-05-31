@@ -16,6 +16,14 @@ const state = {
   currentLocation: "",
   meetingDate: new Date().toISOString(),
   appKey: localStorage.getItem("app_key") || "",
+  // 기능 1: 파형
+  audioCtx: null,
+  analyser: null,
+  waveAnimFrame: null,
+  // 기능 6: 실시간 메모
+  liveNotes: [],
+  // 기능 8: 녹음 시간
+  recordDurationSec: 0,
 };
 
 // ── 상수 ──────────────────────────────────────────────────────
@@ -209,11 +217,84 @@ async function loadStats() {
     $("statCompleted").textContent = s.completed;
     $("statThisWeek").textContent  = s.this_week;
     $("statFailed").textContent    = s.failed;
+    $("statTotalMin").textContent  = s.total_min ?? "—";
+    $("statAvgMin").textContent    = s.avg_min   ?? "—";
     const byType = $("statsByType");
     byType.innerHTML = s.by_type.map(t =>
       `<span class="stat-type-pill">${meetingTypeLabel(t.meeting_type)} ${t.count}</span>`
     ).join("");
   } catch { /* demo mode */ }
+}
+
+// ── 기능 1: 파형 시각화 ───────────────────────────────────────
+function startWaveform(stream) {
+  const canvas = $("waveformCanvas");
+  if (!canvas) return;
+
+  // HiDPI 대응
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  try {
+    state.audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    state.analyser  = state.audioCtx.createAnalyser();
+    state.analyser.fftSize = 128;
+    state.audioCtx.createMediaStreamSource(stream).connect(state.analyser);
+  } catch { return; }
+
+  const bufLen  = state.analyser.frequencyBinCount;
+  const data    = new Uint8Array(bufLen);
+  const W       = rect.width;
+  const H       = rect.height;
+  const barW    = W / bufLen;
+
+  function draw() {
+    state.waveAnimFrame = requestAnimationFrame(draw);
+    state.analyser.getByteFrequencyData(data);
+    ctx.clearRect(0, 0, W, H);
+    data.forEach((val, i) => {
+      const ratio = val / 255;
+      const h     = ratio * H;
+      ctx.fillStyle = `rgba(94,106,210,${0.3 + ratio * 0.7})`;
+      ctx.beginPath();
+      ctx.roundRect(i * barW + 1, H - h, barW - 2, h, 2);
+      ctx.fill();
+    });
+  }
+  draw();
+}
+
+function stopWaveform() {
+  if (state.waveAnimFrame) cancelAnimationFrame(state.waveAnimFrame);
+  if (state.audioCtx)      state.audioCtx.close().catch(() => {});
+  state.audioCtx = state.analyser = state.waveAnimFrame = null;
+  const canvas = $("waveformCanvas");
+  if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ── 기능 6: 실시간 메모 ───────────────────────────────────────
+function addLiveNote(text) {
+  if (!text.trim()) return;
+  const elapsed = state.recordStartTime
+    ? Math.floor((Date.now() - state.recordStartTime) / 1000) : 0;
+  state.liveNotes.push({ time_sec: elapsed, text: text.trim() });
+  renderLiveNotesInput();
+}
+
+function renderLiveNotesInput() {
+  const display = $("liveNotesDisplay");
+  if (!display) return;
+  display.innerHTML = state.liveNotes.map(n => `
+    <div class="live-note-chip">
+      <span class="live-note-time">${formatSeconds(n.time_sec)}</span>
+      <span>${escapeHtml(n.text)}</span>
+    </div>
+  `).join("");
+  display.scrollTop = display.scrollHeight;
 }
 
 // ── 회의 목록 ─────────────────────────────────────────────────
@@ -262,7 +343,7 @@ function renderMeetings() {
         <span class="meeting-title">${escapeHtml(m.title)}</span>
         <span class="pill ${done?"done":failed?"error":""}">${STATUS_LABEL[m.status]||m.status}</span>
       </div>
-      <div class="meeting-meta">${formatDate(m.meeting_date)} · ${meetingTypeLabel(m.meeting_type)}</div>
+      <div class="meeting-meta">${formatDate(m.meeting_date)} · ${meetingTypeLabel(m.meeting_type)}${m.duration_sec > 0 ? ` · ${formatSeconds(m.duration_sec)}` : ""}</div>
       ${failed ? `<div class="error-hint">⚠️ ${escapeHtml(m.last_error||"처리 실패")} <button class="retry-btn" data-id="${m.meeting_id}">재시도</button></div>` : ""}
       ${!done && !failed ? `<progress value="${m.progress_percent||0}" max="100"></progress>` : ""}
       <div class="tag-row">${(m.tags||[]).slice(0,4).map(t=>`<span>#${escapeHtml(t)}</span>`).join("")}</div>
@@ -291,7 +372,9 @@ async function renderDetail(meeting) {
   $("emptyDetail").classList.add("hidden");
   $("meetingDetail").classList.remove("hidden");
   $("detailTitle").textContent = meeting.title;
-  $("detailMeta").textContent  = `${formatDate(meeting.meeting_date)} · ${meetingTypeLabel(meeting.meeting_type)} · ${STATUS_LABEL[meeting.status]||meeting.status}`;
+  const durText = meeting.duration_sec > 0
+    ? ` · ${formatSeconds(meeting.duration_sec)}` : "";
+  $("detailMeta").textContent = `${formatDate(meeting.meeting_date)} · ${meetingTypeLabel(meeting.meeting_type)} · ${STATUS_LABEL[meeting.status]||meeting.status}${durText}`;
   $("markdownLink").href = `/v1/meetings/${meeting.meeting_id}/export/markdown`;
   $("pdfLink").href      = `/v1/meetings/${meeting.meeting_id}/export/pdf`;
   $("shareResult").classList.add("hidden");
@@ -321,6 +404,9 @@ async function renderDetail(meeting) {
     input.addEventListener("keydown", e => { if(e.key==="Enter") save(); if(e.key==="Escape") { input.value=cur; save(); } });
   };
 
+  // 녹음 중 메모 표시
+  renderSavedLiveNotes(meeting);
+
   if (state.demoMode) {
     state.selectedSummary = DEMO_SUMMARY;
     renderSummaryView(DEMO_SUMMARY);
@@ -345,6 +431,23 @@ async function renderDetail(meeting) {
     renderList($("actionsList"),   []);
     renderTranscript([]);
   }
+}
+
+function renderSavedLiveNotes(meeting) {
+  const section = $("liveNotesSavedSection");
+  const container = $("liveNotesSaved");
+  if (!section || !container) return;
+  try {
+    const notes = JSON.parse(meeting.live_notes_json || "[]");
+    if (!notes.length) { section.classList.add("hidden"); return; }
+    section.classList.remove("hidden");
+    container.innerHTML = notes.map(n => `
+      <div class="live-note-chip">
+        <span class="live-note-time">${formatSeconds(n.time_sec)}</span>
+        <span>${escapeHtml(n.text)}</span>
+      </div>
+    `).join("");
+  } catch { section.classList.add("hidden"); }
 }
 
 function renderSummaryView(summary) {
@@ -478,6 +581,8 @@ async function uploadFile(file) {
   form.append("meeting_type", $("meetingType").value || "general");
   form.append("meeting_date", state.meetingDate);
   form.append("template",     template);
+  form.append("duration_sec", String(state.recordDurationSec || 0));
+  form.append("live_notes",   JSON.stringify(state.liveNotes));
   form.append("file",         file, file.name || "recording.webm");
 
   $("uploadButton").disabled = true;
@@ -512,11 +617,14 @@ function startRecordTimer() {
   state.recordStartTime = Date.now();
   $("recordTimer").classList.remove("hidden");
   state.recordTimerInterval = setInterval(() => {
-    $("recordTimer").textContent = formatSeconds(Math.floor((Date.now()-state.recordStartTime)/1000));
+    const elapsed = Math.floor((Date.now() - state.recordStartTime) / 1000);
+    $("recordTimer").textContent = formatSeconds(elapsed);
   }, 1000);
 }
 
 function stopRecordTimer() {
+  state.recordDurationSec = state.recordStartTime
+    ? Math.floor((Date.now() - state.recordStartTime) / 1000) : 0;
   clearInterval(state.recordTimerInterval);
   $("recordTimer").classList.add("hidden");
 }
@@ -538,6 +646,9 @@ async function toggleRecording() {
   state.mediaRecorder.addEventListener("stop", async () => {
     stream.getTracks().forEach(t => t.stop());
     stopRecordTimer();
+    stopWaveform();
+    // 파형/메모 영역 숨기기
+    $("waveformArea").classList.add("hidden");
     $("recordButton").classList.remove("recording");
     $("recordLabel").textContent = "회의 녹음 시작";
     const ext  = mimeType.includes("mp4") ? "mp4" : mimeType.includes("ogg") ? "ogg" : "webm";
@@ -549,6 +660,13 @@ async function toggleRecording() {
   $("recordButton").classList.add("recording");
   $("recordLabel").textContent = "녹음 중지 & 분석";
   startRecordTimer();
+
+  // 파형 시작
+  startWaveform(stream);
+  state.liveNotes = [];
+  renderLiveNotesInput();
+  $("waveformArea").classList.remove("hidden");
+  if ($("liveNoteInput")) $("liveNoteInput").value = "";
 }
 
 // ── 폴링 (지수 백오프) ────────────────────────────────────────
@@ -589,6 +707,17 @@ function bindEvents() {
   $("uploadButton").addEventListener("click", handleUploadClick);
   $("recordButton").addEventListener("click", toggleRecording);
   $("searchInput").addEventListener("keydown", e => { if(e.key==="Enter") loadMeetings(); });
+  // 기능 6: 실시간 메모 Enter 입력
+  const liveNoteInput = $("liveNoteInput");
+  if (liveNoteInput) {
+    liveNoteInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && liveNoteInput.value.trim()) {
+        addLiveNote(liveNoteInput.value);
+        liveNoteInput.value = "";
+      }
+    });
+  }
+
   $("statsToggle").addEventListener("click", async () => {
     const panel = $("statsPanel");
     const hidden = panel.classList.toggle("hidden");
