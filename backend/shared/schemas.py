@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class UploadMeetingRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     meeting_type: str = Field(default="general")
-    meeting_date: str = Field(description="ISO-8601 date string, e.g. 2026-05-04")
+    meeting_date: str = Field(description="ISO-8601 date string")
     source_filename: str = Field(min_length=1)
 
 
@@ -64,11 +64,18 @@ class MeetingListResponse(BaseModel):
 
 
 class UpdateMeetingMetadataRequest(BaseModel):
+    title: str | None = None
     meeting_type: str | None = None
     participants: list[str] | None = None
     tags: list[str] | None = None
     project_id: str | None = None
     privacy_level: str | None = None
+
+
+class UpdateSummaryRequest(BaseModel):
+    abstract: str | None = None
+    decisions: list[str] | None = None
+    action_items: list[str] | None = None
 
 
 class CreateShareLinkRequest(BaseModel):
@@ -83,3 +90,17 @@ class ShareLinkResponse(BaseModel):
     permission: str
     expires_at: str | None = None
     share_url: str
+
+
+class StatsTypeCount(BaseModel):
+    meeting_type: str
+    count: int
+
+
+class StatsResponse(BaseModel):
+    total: int
+    completed: int
+    failed: int
+    processing: int
+    by_type: list[StatsTypeCount]
+    this_week: int

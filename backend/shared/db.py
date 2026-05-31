@@ -1,11 +1,26 @@
+import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from shared.config import DB_PATH
+from shared.config import DB_PATH, TURSO_URL, TURSO_TOKEN
 
 
 def _conn() -> sqlite3.Connection:
+    """Turso(libsql) 또는 로컬 SQLite에 연결합니다."""
+    if TURSO_URL and TURSO_TOKEN:
+        try:
+            import libsql_experimental as libsql  # type: ignore
+            conn = libsql.connect(
+                database=DB_PATH,
+                sync_url=TURSO_URL,
+                auth_token=TURSO_TOKEN,
+            )
+            conn.sync()
+            return conn  # type: ignore
+        except Exception:
+            pass  # fallback to local SQLite
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
@@ -15,70 +30,69 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _week_start_iso() -> str:
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    monday = now - timedelta(days=now.weekday())
+    return monday.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
 def init_db() -> None:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with _conn() as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS meetings (
-                meeting_id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                meeting_type TEXT NOT NULL,
-                meeting_date TEXT NOT NULL,
+                meeting_id      TEXT PRIMARY KEY,
+                title           TEXT NOT NULL,
+                meeting_type    TEXT NOT NULL,
+                meeting_date    TEXT NOT NULL,
                 source_filename TEXT NOT NULL,
-                stored_path TEXT,
-                job_id TEXT,
-                status TEXT NOT NULL,
-                last_error TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                stored_path     TEXT,
+                job_id          TEXT,
+                status          TEXT NOT NULL,
+                last_error      TEXT,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL
             )
-            """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS transcript_segments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                meeting_id TEXT NOT NULL,
-                speaker TEXT,
-                start_sec REAL NOT NULL,
-                end_sec REAL NOT NULL,
-                text TEXT NOT NULL,
-                created_at TEXT NOT NULL,
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                meeting_id  TEXT NOT NULL,
+                speaker     TEXT,
+                start_sec   REAL NOT NULL,
+                end_sec     REAL NOT NULL,
+                text        TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
                 FOREIGN KEY(meeting_id) REFERENCES meetings(meeting_id)
             )
-            """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS meeting_summaries (
-                meeting_id TEXT PRIMARY KEY,
-                abstract TEXT NOT NULL,
-                decisions_json TEXT NOT NULL,
+                meeting_id      TEXT PRIMARY KEY,
+                abstract        TEXT NOT NULL,
+                decisions_json  TEXT NOT NULL,
                 action_items_json TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL,
                 FOREIGN KEY(meeting_id) REFERENCES meetings(meeting_id)
             )
-            """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS share_links (
-                token TEXT PRIMARY KEY,
-                meeting_id TEXT NOT NULL,
-                permission TEXT NOT NULL,
-                expires_at TEXT,
-                passcode TEXT,
-                created_at TEXT NOT NULL,
+                token       TEXT PRIMARY KEY,
+                meeting_id  TEXT NOT NULL,
+                permission  TEXT NOT NULL,
+                expires_at  TEXT,
+                passcode    TEXT,
+                created_at  TEXT NOT NULL,
                 FOREIGN KEY(meeting_id) REFERENCES meetings(meeting_id)
             )
-            """
-        )
+        """)
         _ensure_column(conn, "meetings", "participants_json", "TEXT NOT NULL DEFAULT '[]'")
-        _ensure_column(conn, "meetings", "tags_json", "TEXT NOT NULL DEFAULT '[]'")
-        _ensure_column(conn, "meetings", "project_id", "TEXT")
-        _ensure_column(conn, "meetings", "privacy_level", "TEXT NOT NULL DEFAULT 'private'")
+        _ensure_column(conn, "meetings", "tags_json",         "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "meetings", "project_id",        "TEXT")
+        _ensure_column(conn, "meetings", "privacy_level",     "TEXT NOT NULL DEFAULT 'private'")
         conn.commit()
 
 
@@ -104,31 +118,19 @@ def create_meeting(
 ) -> None:
     now = _now_iso()
     with _conn() as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO meetings (
                 meeting_id, title, meeting_type, meeting_date,
                 source_filename, stored_path, status,
                 participants_json, tags_json, project_id, privacy_level,
                 created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                meeting_id,
-                title,
-                meeting_type,
-                meeting_date,
-                source_filename,
-                stored_path,
-                status,
-                participants_json,
-                tags_json,
-                project_id,
-                privacy_level,
-                now,
-                now,
-            ),
-        )
+        """, (
+            meeting_id, title, meeting_type, meeting_date,
+            source_filename, stored_path, status,
+            participants_json, tags_json, project_id, privacy_level,
+            now, now,
+        ))
         conn.commit()
 
 
@@ -145,22 +147,17 @@ def update_job_info(meeting_id: str, job_id: str) -> None:
 def update_meeting_status(meeting_id: str, status: str, last_error: str | None = None) -> None:
     now = _now_iso()
     with _conn() as conn:
-        conn.execute(
-            """
-            UPDATE meetings
-            SET status = ?, last_error = ?, updated_at = ?
+        conn.execute("""
+            UPDATE meetings SET status = ?, last_error = ?, updated_at = ?
             WHERE meeting_id = ?
-            """,
-            (status, last_error, now, meeting_id),
-        )
+        """, (status, last_error, now, meeting_id))
         conn.commit()
 
 
 def get_meeting(meeting_id: str) -> dict[str, str | None] | None:
     with _conn() as conn:
         row = conn.execute(
-            "SELECT * FROM meetings WHERE meeting_id = ?",
-            (meeting_id,),
+            "SELECT * FROM meetings WHERE meeting_id = ?", (meeting_id,)
         ).fetchone()
     if not row:
         return None
@@ -187,16 +184,20 @@ def list_meetings(
         clauses.append("meeting_date <= ?")
         values.append(date_to)
     if query:
-        clauses.append("(title LIKE ? OR source_filename LIKE ?)")
-        values.extend([f"%{query}%", f"%{query}%"])
+        clauses.append("""(
+            title LIKE ? OR source_filename LIKE ?
+            OR meeting_id IN (
+                SELECT DISTINCT meeting_id FROM transcript_segments WHERE text LIKE ?
+            )
+        )""")
+        values.extend([f"%{query}%", f"%{query}%", f"%{query}%"])
     if tag:
         clauses.append("tags_json LIKE ?")
-        values.append(f"%{tag}%")
+        values.append(f'%"{tag}"%')
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
-        SELECT * FROM meetings
-        {where}
+        SELECT * FROM meetings {where}
         ORDER BY meeting_date DESC, created_at DESC
         LIMIT 200
     """
@@ -207,12 +208,12 @@ def list_meetings(
 
 def update_meeting_metadata(
     meeting_id: str,
+    title: str | None = None,
     meeting_type: str | None = None,
     participants_json: str | None = None,
     tags_json: str | None = None,
     project_id: str | None = None,
     privacy_level: str | None = None,
-    title: str | None = None,
 ) -> None:
     updates: list[str] = []
     values: list[str | None] = []
@@ -259,29 +260,30 @@ def add_transcript_segment(
 ) -> None:
     now = _now_iso()
     with _conn() as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO transcript_segments (
                 meeting_id, speaker, start_sec, end_sec, text, created_at
             ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (meeting_id, speaker, start_sec, end_sec, text, now),
-        )
+        """, (meeting_id, speaker, start_sec, end_sec, text, now))
         conn.commit()
 
 
 def list_transcript_segments(meeting_id: str) -> list[dict[str, str | float | None]]:
     with _conn() as conn:
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT speaker, start_sec, end_sec, text
-            FROM transcript_segments
-            WHERE meeting_id = ?
+            FROM transcript_segments WHERE meeting_id = ?
             ORDER BY start_sec ASC
-            """,
-            (meeting_id,),
-        ).fetchall()
+        """, (meeting_id,)).fetchall()
     return [dict(row) for row in rows]
+
+
+def delete_transcript_segments(meeting_id: str) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "DELETE FROM transcript_segments WHERE meeting_id = ?", (meeting_id,)
+        )
+        conn.commit()
 
 
 def upsert_meeting_summary(
@@ -292,32 +294,55 @@ def upsert_meeting_summary(
 ) -> None:
     now = _now_iso()
     with _conn() as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO meeting_summaries (
                 meeting_id, abstract, decisions_json, action_items_json, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(meeting_id) DO UPDATE SET
-                abstract = excluded.abstract,
-                decisions_json = excluded.decisions_json,
+                abstract          = excluded.abstract,
+                decisions_json    = excluded.decisions_json,
                 action_items_json = excluded.action_items_json,
-                updated_at = excluded.updated_at
-            """,
-            (meeting_id, abstract, decisions_json, action_items_json, now, now),
+                updated_at        = excluded.updated_at
+        """, (meeting_id, abstract, decisions_json, action_items_json, now, now))
+        conn.commit()
+
+
+def update_summary_content(
+    meeting_id: str,
+    abstract: str | None = None,
+    decisions_json: str | None = None,
+    action_items_json: str | None = None,
+) -> None:
+    updates: list[str] = []
+    values: list[str | None] = []
+    if abstract is not None:
+        updates.append("abstract = ?")
+        values.append(abstract)
+    if decisions_json is not None:
+        updates.append("decisions_json = ?")
+        values.append(decisions_json)
+    if action_items_json is not None:
+        updates.append("action_items_json = ?")
+        values.append(action_items_json)
+    if not updates:
+        return
+    updates.append("updated_at = ?")
+    values.append(_now_iso())
+    values.append(meeting_id)
+    with _conn() as conn:
+        conn.execute(
+            f"UPDATE meeting_summaries SET {', '.join(updates)} WHERE meeting_id = ?",
+            values,
         )
         conn.commit()
 
 
 def get_meeting_summary(meeting_id: str) -> dict[str, str] | None:
     with _conn() as conn:
-        row = conn.execute(
-            """
+        row = conn.execute("""
             SELECT meeting_id, abstract, decisions_json, action_items_json
-            FROM meeting_summaries
-            WHERE meeting_id = ?
-            """,
-            (meeting_id,),
-        ).fetchone()
+            FROM meeting_summaries WHERE meeting_id = ?
+        """, (meeting_id,)).fetchone()
     if not row:
         return None
     return dict(row)
@@ -331,23 +356,47 @@ def create_share_link(
     passcode: str | None,
 ) -> None:
     with _conn() as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO share_links (
                 token, meeting_id, permission, expires_at, passcode, created_at
             ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (token, meeting_id, permission, expires_at, passcode, _now_iso()),
-        )
+        """, (token, meeting_id, permission, expires_at, passcode, _now_iso()))
         conn.commit()
 
 
 def get_share_link(token: str) -> dict[str, str | None] | None:
     with _conn() as conn:
         row = conn.execute(
-            "SELECT * FROM share_links WHERE token = ?",
-            (token,),
+            "SELECT * FROM share_links WHERE token = ?", (token,)
         ).fetchone()
     if not row:
         return None
     return dict(row)
+
+
+def get_stats() -> dict:
+    with _conn() as conn:
+        total_row = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status='failed'    THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status NOT IN ('completed','failed') THEN 1 ELSE 0 END) as processing
+            FROM meetings
+        """).fetchone()
+        by_type = conn.execute("""
+            SELECT meeting_type, COUNT(*) as count
+            FROM meetings GROUP BY meeting_type ORDER BY count DESC
+        """).fetchall()
+        this_week = conn.execute(
+            "SELECT COUNT(*) as cnt FROM meetings WHERE created_at >= ?",
+            (_week_start_iso(),),
+        ).fetchone()
+    return {
+        "total":      total_row["total"] or 0,
+        "completed":  total_row["completed"] or 0,
+        "failed":     total_row["failed"] or 0,
+        "processing": total_row["processing"] or 0,
+        "by_type":    [{"meeting_type": r["meeting_type"], "count": r["count"]} for r in by_type],
+        "this_week":  this_week["cnt"] or 0,
+    }

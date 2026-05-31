@@ -6,9 +6,21 @@
     <meta name="theme-color" content="#010102" />
     <title>Auto Write</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles.css?v=4" />
+    <link rel="stylesheet" href="/styles.css?v=5" />
   </head>
   <body>
+
+    <!-- Auth gate -->
+    <div id="authGate" class="auth-gate hidden">
+      <div class="auth-box">
+        <span class="nav-brand-dot" style="margin:0 auto 16px;display:block;width:12px;height:12px;"></span>
+        <h2 style="text-align:center;margin-bottom:8px;">Auto Write</h2>
+        <p style="text-align:center;color:var(--ink-subtle);font-size:14px;margin-bottom:20px;">접근 비밀번호를 입력하세요</p>
+        <input id="authInput" type="password" placeholder="비밀번호" style="margin-bottom:12px;" />
+        <button id="authSubmit" class="btn-primary" style="width:100%;">확인</button>
+        <p id="authError" class="hidden" style="color:#e05577;font-size:13px;text-align:center;margin-top:8px;">비밀번호가 틀렸습니다.</p>
+      </div>
+    </div>
 
     <!-- Top nav -->
     <nav class="top-nav">
@@ -21,16 +33,40 @@
           <span class="pulse-dot"></span>
           <span id="serverStatus">서버 확인 중</span>
         </div>
+        <button id="statsToggle" class="btn-ghost">통계</button>
         <button id="refreshButton" class="btn-ghost">새로고침</button>
       </div>
     </nav>
 
     <main class="app-shell">
 
-      <!-- Record Panel — 최상단 배치 -->
+      <!-- Stats panel (collapsed by default) -->
+      <div id="statsPanel" class="card stats-panel hidden" style="margin-bottom:12px;">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="statTotal">—</span>
+            <span class="stat-label">전체 회의</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statCompleted">—</span>
+            <span class="stat-label">완료</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statThisWeek">—</span>
+            <span class="stat-label">이번 주</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statFailed">—</span>
+            <span class="stat-label">오류</span>
+          </div>
+        </div>
+        <div id="statsByType" class="stats-by-type"></div>
+      </div>
+
+      <!-- Record Panel -->
       <section class="card record-panel" style="margin-bottom:12px;">
 
-        <!-- 1. 녹음 버튼 (최상단, 가장 눈에 띄게) -->
+        <!-- 1. 녹음 버튼 (최상단) -->
         <div class="record-primary-row">
           <button id="recordButton" class="btn-record-primary">
             <span class="record-dot-big"></span>
@@ -41,7 +77,7 @@
 
         <div class="or-divider"><span>또는 파일 업로드</span></div>
 
-        <!-- 2. 파일 업로드 (보조) -->
+        <!-- 2. 파일 업로드 -->
         <div class="upload-row" style="margin-bottom:16px;">
           <input id="audioFile" type="file" accept="audio/*" />
           <button id="uploadButton" class="btn-primary">업로드 &amp; 분석</button>
@@ -58,8 +94,9 @@
             <span id="datetimeDisplay" class="auto-info-value">—</span>
           </div>
         </div>
+        <p class="record-hint">📌 위치는 이 기기 로컬(브라우저 저장소)에만 저장됩니다. 외부로 전송되지 않습니다.</p>
 
-        <!-- 4. 회의 정보 (보조) -->
+        <!-- 4. 회의 정보 -->
         <div class="form-grid" style="margin-top:12px;">
           <label>
             회의 유형
@@ -72,20 +109,28 @@
             </select>
           </label>
           <label>
-            회의 제목
-            <input id="meetingTitle" type="text" placeholder="AI가 자동 생성합니다" />
+            템플릿
+            <select id="meetingTemplate">
+              <option value="general">기본</option>
+              <option value="standup">스탠드업</option>
+              <option value="1on1">1-on-1</option>
+              <option value="planning">기획회의</option>
+              <option value="interview">인터뷰</option>
+            </select>
           </label>
         </div>
-
-        <p id="recordingHint" class="record-hint">iPhone Safari에서는 마이크 권한 요청이 표시됩니다.</p>
+        <label style="margin-top:10px;display:grid;gap:8px;color:var(--ink-subtle);font-size:13px;font-weight:500;">
+          회의 제목 (비워두면 AI가 자동 생성)
+          <input id="meetingTitle" type="text" placeholder="AI가 자동으로 생성합니다" />
+        </label>
       </section>
 
       <!-- Toolbar -->
       <div class="card toolbar" style="margin-bottom:12px;">
         <label class="search-box" style="flex:1 1 260px;">
-          <input id="searchInput" type="search" placeholder="회의 제목 또는 파일명 검색" />
+          <input id="searchInput" type="search" placeholder="제목 · 내용 · 전사 내용 검색" />
         </label>
-        <label style="white-space:nowrap; min-width:100px;">
+        <label style="white-space:nowrap;min-width:100px;">
           <select id="filterType">
             <option value="">전체 유형</option>
             <option value="general">일반</option>
@@ -95,13 +140,11 @@
             <option value="other">기타</option>
           </select>
         </label>
-        <button id="filterButton" class="btn-secondary">필터 적용</button>
+        <button id="filterButton" class="btn-secondary">검색</button>
       </div>
 
       <!-- Content grid -->
       <div class="content-grid">
-
-        <!-- Meeting list -->
         <aside>
           <div class="list-header">
             <h2>회의 목록</h2>
@@ -110,7 +153,6 @@
           <div id="meetingList" class="meeting-list"></div>
         </aside>
 
-        <!-- Detail -->
         <section class="card-xl detail-card">
           <div id="emptyDetail" class="empty-detail">
             <h2>회의를 선택하세요</h2>
@@ -119,22 +161,28 @@
 
           <article id="meetingDetail" class="hidden">
             <div class="detail-header">
-              <div>
+              <div style="flex:1;min-width:0;">
                 <p id="detailMeta" class="eyebrow" style="margin-bottom:6px;"></p>
-                <h2 id="detailTitle" style="margin-bottom:0;"></h2>
+                <h2 id="detailTitle" style="margin-bottom:0;cursor:pointer;" title="클릭하여 편집"></h2>
               </div>
               <div class="action-group">
+                <button id="calendarButton" class="btn-ghost">📅 캘린더</button>
                 <button id="shareButton" class="btn-ghost">공유 링크</button>
-                <a id="markdownLink" class="btn-ghost ghost-link" target="_blank">Markdown</a>
+                <a id="markdownLink" class="btn-ghost ghost-link" target="_blank">MD</a>
                 <a id="pdfLink" class="btn-ghost ghost-link" target="_blank">PDF</a>
               </div>
             </div>
 
             <div id="shareResult" class="share-result hidden"></div>
 
-            <div class="section-label">AI 요약</div>
+            <div class="section-label">
+              AI 요약
+              <button class="edit-toggle-btn" id="editSummaryBtn">편집</button>
+            </div>
             <div class="summary-block" style="margin-bottom:20px;">
               <p id="summaryText"></p>
+              <textarea id="summaryEdit" class="hidden summary-edit-area" rows="4"></textarea>
+              <button id="saveSummaryBtn" class="btn-primary hidden" style="margin-top:8px;font-size:13px;padding:6px 12px;">저장</button>
             </div>
 
             <div class="two-column" style="margin-bottom:20px;">
@@ -156,6 +204,6 @@
 
     </main>
 
-    <script src="/app.js?v=5" type="module"></script>
+    <script src="/app.js?v=6" type="module"></script>
   </body>
 </html>

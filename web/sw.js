@@ -1,24 +1,41 @@
-const CACHE_NAME = "auto-write-shell-v2";
-const SHELL_ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "auto-write-v3";
+const STATIC = ["/", "/styles.css", "/app.js", "/icon.svg", "/manifest.webmanifest"];
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)));
-  self.skipWaiting();
-});
+self.addEventListener("install", e =>
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting()))
+);
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
-});
+self.addEventListener("activate", e =>
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  )
+);
 
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/v1/") || url.pathname.startsWith("/share/") || url.pathname === "/health") {
+self.addEventListener("fetch", e => {
+  const { pathname } = new URL(e.request.url);
+
+  // API / 공유 링크 → 네트워크 우선, 실패 시 오프라인 응답
+  if (pathname.startsWith("/v1/") || pathname.startsWith("/share/") || pathname === "/health") {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        new Response(JSON.stringify({ error: "오프라인 상태입니다." }), {
+          status: 503, headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
     return;
   }
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+
+  // 정적 파일 → 캐시 우선, 없으면 네트워크 후 캐시 갱신
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(res => {
+        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+        return res;
+      });
+    })
+  );
 });

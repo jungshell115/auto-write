@@ -669,6 +669,83 @@ ul li { margin-bottom: 6px; }
   border-bottom: 1px solid var(--hairline);
 }
 
+/* ── Auth gate ──────────────────────────────────────────────── */
+.auth-gate {
+  position: fixed; inset: 0; z-index: 999;
+  background: var(--canvas);
+  display: flex; align-items: center; justify-content: center;
+}
+.auth-box {
+  width: 320px;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  padding: var(--sp-xl);
+}
+
+/* ── Stats panel ─────────────────────────────────────────────── */
+.stats-panel { padding: var(--sp-lg); }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-md);
+  margin-bottom: var(--sp-md);
+}
+.stat-item { text-align: center; }
+.stat-value { display: block; font-size: 28px; font-weight: 600; letter-spacing: -1px; color: var(--ink); }
+.stat-label { font-size: 12px; color: var(--ink-tertiary); }
+.stats-by-type { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat-type-pill {
+  padding: 3px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  font-size: 12px; color: var(--ink-muted);
+}
+
+/* ── Error / retry ───────────────────────────────────────────── */
+.error-hint {
+  margin-top: 6px; font-size: 12px; color: #e05577;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.retry-btn {
+  padding: 2px 8px;
+  background: rgba(207,45,86,0.12);
+  border: 1px solid rgba(207,45,86,0.4);
+  border-radius: var(--r-xs);
+  color: #e05577; font-size: 11px; font-weight: 500; cursor: pointer;
+}
+
+/* ── Section label with action ───────────────────────────────── */
+.section-label {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.edit-toggle-btn {
+  font-size: 11px; font-weight: 500;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  color: var(--primary); cursor: pointer;
+}
+.edit-toggle-btn:hover { background: var(--surface-2); }
+
+/* ── Summary edit ────────────────────────────────────────────── */
+.summary-edit-area {
+  width: 100%; padding: var(--sp-sm);
+  background: var(--surface-3); border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md); color: var(--ink); font: inherit;
+  font-size: 14px; line-height: 1.6; resize: vertical;
+}
+
+/* ── Title inline edit ───────────────────────────────────────── */
+.title-inline-edit {
+  width: 100%; font-size: 22px; font-weight: 500; letter-spacing: -0.4px;
+  background: var(--surface-2); border: 1px solid var(--primary-focus);
+  border-radius: var(--r-md); color: var(--ink); padding: 4px 8px;
+  box-shadow: 0 0 0 2px rgba(94,105,209,0.25);
+}
+
 /* ── Big record button ──────────────────────────────────────── */
 .record-primary-row {
   display: flex;

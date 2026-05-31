@@ -7,27 +7,40 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# ── 회의 유형 키워드 분류 ─────────────────────────────────────
 MEETING_TYPE_KEYWORDS = {
-    "standup": ("standup", "스탠드업", "데일리", "daily"),
+    "standup":  ("standup", "스탠드업", "데일리", "daily"),
     "planning": ("기획", "planning", "로드맵", "roadmap", "전략"),
-    "hr": ("인사", "채용", "면접", "hr", "직원", "승진", "평가", "인력"),
+    "hr":       ("인사", "채용", "면접", "hr", "직원", "승진", "평가", "인력"),
     "external": ("대외", "외부", "파트너", "협력사", "언론", "홍보", "pr", "external"),
-    "review": ("월간", "monthly", "리뷰", "review", "retrospective"),
-    "sales": ("영업", "sales", "고객", "client"),
+    "review":   ("월간", "monthly", "리뷰", "review", "retrospective"),
+    "sales":    ("영업", "sales", "고객", "client"),
+}
+
+# ── 템플릿별 프롬프트 지시사항 ───────────────────────────────
+TEMPLATE_INSTRUCTIONS = {
+    "standup": "오늘 한 일(Yesterday), 오늘 할 일(Today), 블로커(Blockers)를 중심으로 정리해줘.",
+    "1on1":    "개인 성장, 피드백, 우려사항, 다음 단계를 중심으로 정리해줘.",
+    "planning": "목표, 범위, 마일스톤, 리스크를 중심으로 정리해줘.",
+    "interview": "지원자 강점, 약점, 평가 의견, 채용 여부 권고를 중심으로 정리해줘.",
+    "general":  "",
 }
 
 
-def _summarize_groq(text: str) -> dict[str, Any]:
+def _summarize_groq(text: str, template: str = "general") -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is not set")
 
-    prompt = f"""회의 전사 내용을 바탕으로 아래 JSON 형식으로만 응답해줘:
+    extra = TEMPLATE_INSTRUCTIONS.get(template, "")
+    template_hint = f"\n추가 지침: {extra}" if extra else ""
+
+    prompt = f"""회의 전사 내용을 바탕으로 아래 JSON 형식으로만 응답해줘:{template_hint}
 {{
-    "title": "회의 핵심 내용을 담은 제목 (15자 이내, 명사형으로 끝내기)",
-    "abstract": "회의의 전체적인 내용을 2~3문장으로 요약",
+    "title": "회의 핵심 내용을 담은 제목 (15자 이내, 명사형)",
+    "abstract": "회의 내용을 2~3문장으로 요약",
     "decisions": ["결정된 사항 1", "결정된 사항 2"],
-    "action_items": ["할 일 1 (담당자)", "할 일 2 (기한)"]
+    "action_items": ["할 일 1 (담당자/기한)", "할 일 2"]
 }}
 
 회의 내용:
@@ -52,14 +65,14 @@ def _pick_lines_by_keywords(lines: list[str], keywords: tuple[str, ...], limit: 
     picked: list[str] = []
     for line in lines:
         lower = line.lower()
-        if any(keyword in lower for keyword in keywords):
+        if any(k in lower for k in keywords):
             picked.append(line)
         if len(picked) >= limit:
             break
     return picked
 
 
-def build_summary_payload(transcript_lines: list[str]) -> dict[str, str]:
+def build_summary_payload(transcript_lines: list[str], template: str = "general") -> dict[str, str]:
     cleaned = [line.strip() for line in transcript_lines if line.strip()]
     if not cleaned:
         return {
@@ -72,26 +85,22 @@ def build_summary_payload(transcript_lines: list[str]) -> dict[str, str]:
     full_text = " ".join(cleaned)
 
     try:
-        result = _summarize_groq(full_text)
-        title = result.get("title", "")
-        abstract = result.get("abstract", "요약 생성 실패")
-        decisions = result.get("decisions", [])
+        result = _summarize_groq(full_text, template=template)
+        title        = result.get("title", "")
+        abstract     = result.get("abstract", "요약 생성 실패")
+        decisions    = result.get("decisions", [])
         action_items = result.get("action_items", [])
     except Exception as exc:
-        logger.warning(f"LLM 요약 실패, 규칙 기반으로 전환: {exc}")
-        title = ""
+        logger.warning(f"LLM 요약 실패, 규칙 기반 전환: {exc}")
+        title    = ""
         abstract = " ".join(cleaned[:5])[:700]
-        decisions = _pick_lines_by_keywords(
-            cleaned, keywords=("결정", "확정", "합의", "decide", "decision"), limit=6,
-        )
-        action_items = _pick_lines_by_keywords(
-            cleaned, keywords=("할 일", "todo", "action", "담당", "까지", "기한"), limit=8,
-        )
+        decisions    = _pick_lines_by_keywords(cleaned, ("결정", "확정", "합의", "decide"), limit=6)
+        action_items = _pick_lines_by_keywords(cleaned, ("할 일", "todo", "action", "담당", "기한"), limit=8)
 
     return {
-        "title": title,
-        "abstract": abstract,
-        "decisions_json": json.dumps(decisions, ensure_ascii=False),
+        "title":             title,
+        "abstract":          abstract,
+        "decisions_json":    json.dumps(decisions,    ensure_ascii=False),
         "action_items_json": json.dumps(action_items, ensure_ascii=False),
     }
 
@@ -106,21 +115,20 @@ def build_metadata_payload(title: str, transcript_lines: list[str]) -> dict[str,
 
     tags: list[str] = []
     keyword_tags = {
-        "ai": ("ai", "인공지능", "llm"),
-        "product": ("제품", "product", "기능"),
-        "design": ("디자인", "ui", "ux"),
+        "ai":          ("ai", "인공지능", "llm"),
+        "product":     ("제품", "product", "기능"),
+        "design":      ("디자인", "ui", "ux"),
         "engineering": ("개발", "api", "backend", "frontend", "swift"),
-        "sales": ("영업", "고객", "deal"),
-        "hiring": ("채용", "면접", "recruit"),
+        "sales":       ("영업", "고객", "deal"),
+        "hiring":      ("채용", "면접", "recruit"),
     }
     for tag, keywords in keyword_tags.items():
-        if any(keyword in text for keyword in keywords):
+        if any(k in text for k in keywords):
             tags.append(tag)
-
     if not tags:
         tags.append(meeting_type)
 
     return {
         "meeting_type": meeting_type,
-        "tags_json": json.dumps(tags[:8], ensure_ascii=False),
+        "tags_json":    json.dumps(tags[:8], ensure_ascii=False),
     }
