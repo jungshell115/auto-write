@@ -8,4 +8,3 @@ httpx
 python-dotenv
 boto3
 reportlab
-libsql-experimental

@@ -1,29 +1,116 @@
 import json
-import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+
 from shared.config import DB_PATH, TURSO_URL, TURSO_TOKEN
 
 
-def _conn() -> sqlite3.Connection:
-    """Turso(libsql) 또는 로컬 SQLite에 연결합니다."""
+# ── Turso HTTP 클라이언트 (패키지 불필요) ─────────────────────
+
+def _turso_val(v: dict | None):
+    """Turso JSON 값 → Python 네이티브 타입 변환"""
+    if v is None or v.get("type") == "null":
+        return None
+    t = v.get("type", "text")
+    val = v.get("value")
+    if t == "integer":
+        return int(val) if val is not None else None
+    if t == "float":
+        return float(val) if val is not None else None
+    return val  # text, blob
+
+
+class _TursoRow(dict):
+    """dict이면서 index 접근도 허용 (sqlite3.Row 호환)"""
+    def __init__(self, cols: list, raw: list):
+        vals = [_turso_val(v) for v in raw]
+        super().__init__(zip(cols, vals))
+        self._list = vals
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._list[key]
+        return super().__getitem__(key)
+
+
+class _TursoResult:
+    """fetchone / fetchall 지원 커서"""
+    def __init__(self, cols: list, rows: list):
+        self._rows = [_TursoRow(cols, r) for r in rows]
+        self._idx = 0
+
+    def fetchone(self):
+        if self._idx >= len(self._rows):
+            return None
+        r = self._rows[self._idx]; self._idx += 1; return r
+
+    def fetchall(self):
+        rows = self._rows[self._idx:]; self._idx = len(self._rows); return rows
+
+    def __iter__(self): return self
+    def __next__(self):
+        r = self.fetchone()
+        if r is None: raise StopIteration
+        return r
+
+
+class _TursoConn:
+    """sqlite3 Connection과 호환되는 Turso HTTP 래퍼"""
+    row_factory = None   # sqlite3 호환을 위해 존재 (사용 안 함)
+
+    def __init__(self, url: str, token: str):
+        self._api = url.replace("libsql://", "https://") + "/v2/pipeline"
+        self._token = token
+
+    def _run(self, sql: str, params=()):
+        args = []
+        for p in params:
+            if p is None:
+                args.append({"type": "null", "value": None})
+            elif isinstance(p, int):
+                args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float):
+                args.append({"type": "float", "value": p})
+            else:
+                args.append({"type": "text", "value": str(p)})
+
+        stmt: dict = {"sql": sql}
+        if args:
+            stmt["args"] = args
+
+        resp = httpx.post(
+            self._api,
+            headers={"Authorization": f"Bearer {self._token}",
+                     "Content-Type": "application/json"},
+            json={"requests": [{"type": "execute", "stmt": stmt}, {"type": "close"}]},
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        r0 = resp.json()["results"][0]
+        if r0["type"] == "error":
+            raise RuntimeError(r0["error"]["message"])
+        res = r0["response"]["result"]
+        cols = [c["name"] for c in res["cols"]]
+        return _TursoResult(cols, res["rows"])
+
+    def execute(self, sql: str, params=()):
+        return self._run(sql, params)
+
+    def commit(self): pass   # Turso는 자동 커밋
+    def __enter__(self): return self
+    def __exit__(self, *_): pass
+
+
+def _conn():
+    """Turso(HTTP) 또는 로컬 SQLite 연결을 반환합니다."""
     if TURSO_URL and TURSO_TOKEN:
-        try:
-            import libsql_experimental as libsql  # type: ignore
-            conn = libsql.connect(
-                database=DB_PATH,
-                sync_url=TURSO_URL,
-                auth_token=TURSO_TOKEN,
-            )
-            conn.sync()
-            return conn  # type: ignore
-        except Exception:
-            pass  # fallback to local SQLite
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
+        return _TursoConn(TURSO_URL, TURSO_TOKEN)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def _now_iso() -> str:
