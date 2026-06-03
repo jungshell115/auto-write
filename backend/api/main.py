@@ -133,10 +133,17 @@ def _json_list(raw: str | None) -> list[str]:
     return value if isinstance(value, list) else []
 
 
+# _meeting_response에서 제외할 컬럼 (별도 처리하거나 스키마에 없는 것)
+_EXCLUDE_COLS = {
+    "participants_json", "tags_json", "live_notes_json",
+    "project_id", "privacy_level",
+}
+
 def _meeting_response(meeting: dict) -> MeetingStatusResponse:
+    base = {k: v for k, v in meeting.items() if k not in _EXCLUDE_COLS}
     return MeetingStatusResponse(
-        **{k: v for k, v in meeting.items() if k not in ("participants_json", "tags_json")},
-        progress_percent=STATUS_PROGRESS.get(str(meeting["status"]), 0),
+        **base,
+        progress_percent=STATUS_PROGRESS.get(str(meeting.get("status", "")), 0),
         participants=_json_list(meeting.get("participants_json")),
         tags=_json_list(meeting.get("tags_json")),
         project_id=meeting.get("project_id"),
